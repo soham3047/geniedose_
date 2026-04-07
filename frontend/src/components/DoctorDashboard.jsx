@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
 const DoctorDashboard = () => {
   const [patients, setPatients] = useState(mockPatients);
@@ -14,6 +15,7 @@ const DoctorDashboard = () => {
   const [file, setFile] = useState(null);
   const [age, setAge] = useState('');
   const [weight, setWeight] = useState('');
+  const [hrsdScore, setHrsdScore] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [aiOutput, setAiOutput] = useState(null);
   const [privacyToggle, setPrivacyToggle] = useState(true);
@@ -23,6 +25,7 @@ const DoctorDashboard = () => {
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientHistory, setNewPatientHistory] = useState('');
   const [error, setError] = useState(null);
+  const [doctorAdvice, setDoctorAdvice] = useState('');
 
   useEffect(() => {
     setFilteredPatients(
@@ -60,8 +63,16 @@ const DoctorDashboard = () => {
       setError('Please select a patient');
       return;
     }
+    if (!selectedMedicine) {
+      setError('Please select a medicine');
+      return;
+    }
     if (!age || !weight) {
       setError('Please enter age and weight');
+      return;
+    }
+    if (selectedMedicine.toLowerCase() === 'antidepressant' && !hrsdScore) {
+      setError('Please enter HRSD score for antidepressant prediction');
       return;
     }
     if (!file) {
@@ -75,7 +86,12 @@ const DoctorDashboard = () => {
       const formData = new FormData();
       formData.append('age', age);
       formData.append('weight', weight);
+      formData.append('medicine', selectedMedicine);
       formData.append('file', file);
+      
+      if (selectedMedicine.toLowerCase() === 'antidepressant') {
+        formData.append('hrsd_score', hrsdScore || '15'); // Default to 15 if not provided
+      }
 
       const response = await fetch('/calculate-dose', {
         method: 'POST',
@@ -88,13 +104,24 @@ const DoctorDashboard = () => {
       }
 
       const data = await response.json();
-      setAiOutput({
-        dosage: `${data.recommended_dose} ${data.unit}`,
-        confidence: data.confidence,
-        reasoning: `Patient has ${data.detected_genotypes.vkorc1} and ${data.detected_genotypes.cyp2c9}. ${data.warning}`,
-        clinicalData: data.clinical_data,
-        detectedGenotypes: data.detected_genotypes
-      });
+      
+      if (selectedMedicine.toLowerCase() === 'antidepressant') {
+        setAiOutput({
+          dosage: data.dose_range,
+          confidence: data.confidence,
+          reasoning: `Patient metabolizer status: ${data.metabolizer_status}. Baseline severity: ${data.baseline_severity}. ${data.recommendation} ${data.warning}`,
+          clinicalData: data.clinical_data,
+          detectedGenotypes: data.detected_genotypes
+        });
+      } else {
+        setAiOutput({
+          dosage: `${data.recommended_dose} ${data.unit}`,
+          confidence: data.confidence,
+          reasoning: `Patient has ${data.detected_genotypes.vkorc1} and ${data.detected_genotypes.cyp2c9}. ${data.warning}`,
+          clinicalData: data.clinical_data,
+          detectedGenotypes: data.detected_genotypes
+        });
+      }
     } catch (err) {
       setError(err.message || 'Error calculating dose. Make sure the backend is running and the frontend is served from the same app.');
     } finally {
@@ -188,7 +215,10 @@ const DoctorDashboard = () => {
               <Select
                 value={selectedPatient?.id || ''}
                 onValueChange={(value) => {
-                  setSelectedPatient(patients.find(p => p.id === parseInt(value)));
+                  const patient = patients.find(p => p.id === parseInt(value));
+                  setSelectedPatient(patient);
+                  // Load existing doctor's advice for this patient
+                  setDoctorAdvice(patient?.doctorAdvice || '');
                 }}
               >
                 <SelectTrigger className="bg-muted text-foreground border-primary/30">
@@ -198,6 +228,9 @@ const DoctorDashboard = () => {
                   {filteredPatients.map(patient => (
                     <SelectItem key={patient.id} value={patient.id.toString()}>
                       {patient.name} - {patient.history}
+                      {patient.doctorAdvice && (
+                        <span className="text-xs text-blue-600 ml-2">📝 Has doctor's notes</span>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -248,6 +281,19 @@ const DoctorDashboard = () => {
                   />
                 </div>
               </div>
+              {selectedMedicine.toLowerCase() === 'antidepressant' && (
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">HRSD Score (0-52)</label>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 18"
+                    value={hrsdScore}
+                    onChange={(e) => setHrsdScore(e.target.value)}
+                    className="bg-muted text-foreground placeholder:text-muted-foreground border-border"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Hamilton Rating Scale for Depression score</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -326,18 +372,97 @@ const DoctorDashboard = () => {
                   <div className="pt-2 border-t border-border">
                     <span className="font-semibold">Detected Genotypes:</span>
                     <div className="mt-2 space-y-1 text-sm">
-                      <p className="text-muted-foreground">
-                        <span className="font-medium">VKORC1:</span> {aiOutput.detectedGenotypes.vkorc1}
-                      </p>
-                      <p className="text-muted-foreground">
-                        <span className="font-medium">CYP2C9:</span> {aiOutput.detectedGenotypes.cyp2c9}
-                      </p>
+                      {selectedMedicine.toLowerCase() === 'antidepressant' ? (
+                        // For antidepressants, show CYP2D6/CYP2C19 variants
+                        Object.entries(aiOutput.detectedGenotypes).map(([rsid, genotype]) => (
+                          <p key={rsid} className="text-muted-foreground">
+                            <span className="font-medium">{rsid}:</span> {genotype}
+                          </p>
+                        ))
+                      ) : (
+                        // For warfarin, show VKORC1 and CYP2C9
+                        <>
+                          <p className="text-muted-foreground">
+                            <span className="font-medium">VKORC1:</span> {aiOutput.detectedGenotypes.vkorc1}
+                          </p>
+                          <p className="text-muted-foreground">
+                            <span className="font-medium">CYP2C9:</span> {aiOutput.detectedGenotypes.cyp2c9}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
                 <div>
                   <span className="font-semibold">Reasoning:</span>
                   <p className="text-muted-foreground mt-1">{aiOutput.reasoning}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Doctor's Advice Section */}
+          {aiOutput && (
+            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
+              <CardHeader>
+                <CardTitle className="text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Doctor's Advice
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 block">
+                    Additional Clinical Notes & Alternative Recommendations
+                  </label>
+                  <Textarea
+                    placeholder="Enter any additional clinical considerations, alternative dosing recommendations, or notes about patient-specific factors (e.g., drug interactions, comorbidities, patient preferences)..."
+                    value={doctorAdvice}
+                    onChange={(e) => setDoctorAdvice(e.target.value)}
+                    className="min-h-[100px] bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-600 text-black dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    rows={4}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      onClick={() => {
+                        // Save doctor's advice to patient data
+                        if (selectedPatient && doctorAdvice.trim()) {
+                          const updatedPatients = patients.map(patient =>
+                            patient.id === selectedPatient.id
+                              ? { ...patient, doctorAdvice: doctorAdvice.trim() }
+                              : patient
+                          );
+                          setPatients(updatedPatients);
+                          setSelectedPatient({ ...selectedPatient, doctorAdvice: doctorAdvice.trim() });
+                          alert('Doctor\'s advice saved to patient record!');
+                        }
+                      }}
+                      disabled={!selectedPatient || !doctorAdvice.trim()}
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Save to Patient Record
+                    </Button>
+                    <Button
+                      onClick={() => setDoctorAdvice('')}
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                {doctorAdvice.trim() && (
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-1">Clinical Notes:</p>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-wrap">{doctorAdvice}</p>
+                  </div>
+                )}
+                <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 p-2 rounded">
+                  <strong>Note:</strong> This section allows you to document clinical judgment, alternative dosing strategies, or additional considerations not captured by the AI model. Your expertise ensures the best patient care.
                 </div>
               </CardContent>
             </Card>

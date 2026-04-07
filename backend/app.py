@@ -2,8 +2,9 @@ import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from models.warfarin import calculate_warfarin_dose
+from models.antidepressant import predict_ssri_response
 from werkzeug.utils import secure_filename
-from vcf_parser import scan_vcf_for_warfarin
+from vcf_parser import scan_vcf_for_warfarin, scan_vcf_for_antidepressant
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIST = os.path.normpath(os.path.join(BASE_DIR, '..', 'frontend', 'dist'))
@@ -54,9 +55,10 @@ def predict():
 def calculate_dose():
     """Combined endpoint: upload VCF, parse genotypes, and calculate dose"""
     try:
-        # Get age and weight from form data
+        # Get form data
         age = request.form.get('age')
         weight = request.form.get('weight')
+        medicine = request.form.get('medicine', 'warfarin')  # Default to warfarin
         
         # Get the VCF file
         if 'file' not in request.files:
@@ -72,46 +74,75 @@ def calculate_dose():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         
-        # Parse VCF to extract genotypes
-        genotypes = scan_vcf_for_warfarin(filepath)
-        
-        # Extract genotypes from the parsed data
-        vkorc1 = genotypes.get('vkorc1', '-1639G>A (unknown)')
-        cyp2c9 = genotypes.get('cyp2c9', '*1/*1 (unknown)')
-        
-        # Calculate confidence based on genotype knowledge
-        if '(unknown)' not in vkorc1 and '(unknown)' not in cyp2c9:
-            confidence = 92  # Both genotypes known
-        elif '(unknown)' not in vkorc1 or '(unknown)' not in cyp2c9:
-            confidence = 75  # One genotype known
+        # Parse VCF based on medicine type
+        if medicine.lower() == 'antidepressant':
+            genotypes = scan_vcf_for_antidepressant(filepath)
         else:
-            confidence = 60  # Both genotypes unknown
+            genotypes = scan_vcf_for_warfarin(filepath)
         
-        # Calculate dose using the warfarin model
-        recommended_dose = calculate_warfarin_dose(
-            age=int(age),
-            weight=int(weight),
-            height=170,  # Default height, can be added to form later
-            vkorc1_genotype=vkorc1,
-            cyp2c9_genotype=cyp2c9,
-            is_african_american=False,
-            taking_amiodarone=False
-        )
+        # Calculate based on medicine type
+        if medicine.lower() == 'antidepressant':
+            # For antidepressants, we need HRSD score (default to 15 if not provided)
+            hrsd_score = int(request.form.get('hrsd_score', 15))
+            result = predict_ssri_response(genotypes, hrsd_score)
+            
+            # Calculate confidence for antidepressants
+            confidence = 85 if genotypes else 60  # Simplified confidence calculation
+            
+            response_data = {
+                "clinical_data": {
+                    "hrsd_score": hrsd_score
+                },
+                "detected_genotypes": genotypes,
+                "recommendation": result["recommendation"],
+                "metabolizer_status": result["status"],
+                "baseline_severity": result["baseline_severity"],
+                "dose_range": result["dose_range"],
+                "confidence": confidence,
+                "unit": "recommendation",
+                "warning": "Please consult a healthcare professional before starting antidepressant therapy."
+            }
+        else:
+            # Warfarin calculation
+            # Extract genotypes from the parsed data
+            vkorc1 = genotypes.get('vkorc1', '-1639G>A (unknown)')
+            cyp2c9 = genotypes.get('cyp2c9', '*1/*1 (unknown)')
+            
+            # Calculate confidence based on genotype knowledge
+            if '(unknown)' not in vkorc1 and '(unknown)' not in cyp2c9:
+                confidence = 92  # Both genotypes known
+            elif '(unknown)' not in vkorc1 or '(unknown)' not in cyp2c9:
+                confidence = 75  # One genotype known
+            else:
+                confidence = 60  # Both genotypes unknown
+            
+            # Calculate dose using the warfarin model
+            recommended_dose = calculate_warfarin_dose(
+                age=int(age),
+                weight=int(weight),
+                height=170,  # Default height, can be added to form later
+                vkorc1_genotype=vkorc1,
+                cyp2c9_genotype=cyp2c9,
+                is_african_american=False,
+                taking_amiodarone=False
+            )
+            
+            response_data = {
+                "clinical_data": {
+                    "age": int(age),
+                    "weight": int(weight)
+                },
+                "detected_genotypes": {
+                    "vkorc1": vkorc1,
+                    "cyp2c9": cyp2c9
+                },
+                "recommended_dose": recommended_dose,
+                "confidence": confidence,
+                "unit": "mg/day",
+                "warning": "Please consult a healthcare professional before using this dose."
+            }
         
-        return jsonify({
-            "clinical_data": {
-                "age": int(age),
-                "weight": int(weight)
-            },
-            "detected_genotypes": {
-                "vkorc1": vkorc1,
-                "cyp2c9": cyp2c9
-            },
-            "recommended_dose": recommended_dose,
-            "confidence": confidence,
-            "unit": "mg/day",
-            "warning": "Please consult a healthcare professional before using this dose."
-        })
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

@@ -8,6 +8,10 @@ def scan_vcf_for_warfarin(vcf_path):
     
     found_genotypes = {"vkorc1": "GG", "cyp2c9": "*1/*1"} # Defaults
     
+    # Track if we found any warfarin variants
+    found_vkorc1 = False
+    found_cyp2c9 = False
+    
     try:
         with open(vcf_path, 'r') as f:
             for line in f:
@@ -30,10 +34,13 @@ def scan_vcf_for_warfarin(vcf_path):
                         # Mapping 0/1 or 1/1 to medical terms
                         if gene == "vkorc1":
                             found_genotypes["vkorc1"] = "AA" if genotype_info == "1/1" else "GA" if genotype_info == "0/1" else "GG"
+                            found_vkorc1 = True
                         elif gene == "cyp2c9*2" and (genotype_info == "0/1" or genotype_info == "1/1"):
                             found_genotypes["cyp2c9"] = "*1/*2" if genotype_info == "0/1" else "*2/*2"
+                            found_cyp2c9 = True
                         elif gene == "cyp2c9*3" and (genotype_info == "0/1" or genotype_info == "1/1"):
                             found_genotypes["cyp2c9"] = "*1/*3" if genotype_info == "0/1" else "*3/*3"
+                            found_cyp2c9 = True
                 except (IndexError, ValueError):
                     # Skip malformed lines
                     continue
@@ -41,6 +48,12 @@ def scan_vcf_for_warfarin(vcf_path):
         return {"error": "VCF file not found"}
     except Exception as e:
         return {"error": f"Error parsing VCF: {str(e)}"}
+
+    # If warfarin variants were not found in the VCF, mark as unknown
+    if not found_vkorc1:
+        found_genotypes["vkorc1"] = "GG (unknown)"
+    if not found_cyp2c9:
+        found_genotypes["cyp2c9"] = "*1/*1 (unknown)"
 
     return found_genotypes
 
@@ -70,4 +83,47 @@ def scan_vcf(vcf_path, target_rsids):
                 genotype_info = columns[9].split(':')[0]
                 found_genotypes[rsid] = genotype_info
 
+    return found_genotypes
+
+def scan_vcf_for_antidepressant(vcf_path):
+    """
+    Scan VCF file for antidepressant-related genetic variants.
+    Focuses on CYP2D6 and CYP2C19 genes which affect SSRI metabolism.
+    """
+    target_rsids = {
+        "rs62224610": "cyp2c19",
+        "rs113745916": "cyp2d6",
+        "rs1061235": "cyp2d6"  # Additional CYP2D6 variant used in model
+    }
+    
+    found_genotypes = {}
+    
+    try:
+        with open(vcf_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'): 
+                    continue
+                
+                columns = line.split('\t')
+                
+                if len(columns) < 10:
+                    continue
+                
+                try:
+                    rsid = columns[2]
+                    genotype_info = columns[9].split(':')[0]
+                    
+                    if rsid in target_rsids:
+                        gene = target_rsids[rsid]
+                        found_genotypes[rsid] = genotype_info
+                        
+                except (IndexError, ValueError):
+                    continue
+                    
+    except FileNotFoundError:
+        return {"error": "VCF file not found"}
+    except Exception as e:
+        return {"error": f"Error parsing VCF: {str(e)}"}
+    
     return found_genotypes

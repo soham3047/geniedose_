@@ -50,6 +50,7 @@ export const mockMedicines = [
   "5-Fluorouracil",
   "Codeine",
   "Tamoxifen",
+  "Antidepressant",
 ];
 
 export const mockAIOutput = {
