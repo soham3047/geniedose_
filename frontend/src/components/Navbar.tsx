@@ -1,18 +1,16 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dna, Menu, X } from "lucide-react";
 
 const navLinks = [
-  { label: "Problem", href: "#problem" },
-  { label: "Solution", href: "#solution" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Architecture", href: "#architecture" },
-  { label: "Tech Stack", href: "#tech-stack" },
-  { label: "Future", href: "#future" },
 ];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -44,6 +42,12 @@ export default function Navbar() {
               {link.label}
             </a>
           ))}
+          <button
+            onClick={() => navigate('/sign-in')}
+            className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-glow hover:bg-primary/90 transition duration-200 border border-primary/40"
+          >
+            Sign In
+          </button>
         </div>
 
         <button className="md:hidden text-foreground" onClick={() => setOpen(!open)}>
@@ -63,6 +67,15 @@ export default function Navbar() {
               {link.label}
             </a>
           ))}
+          <button
+            onClick={() => {
+              navigate('/sign-in');
+              setOpen(false);
+            }}
+            className="block w-full text-left py-2 text-sm bg-primary text-primary-foreground px-4 rounded-md hover:bg-primary/90 transition-colors mt-2"
+          >
+            Sign In
+          </button>
         </div>
       )}
     </nav>

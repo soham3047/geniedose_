@@ -15,17 +15,13 @@ export default function FooterSection() {
           </p>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center justify-center">
           <div className="flex items-center gap-2">
             <Dna className="w-5 h-5 text-primary" />
             <span className="font-display text-lg font-bold text-foreground">
               Genie<span className="text-primary">Dose</span>
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Presented by Soham Mundada, Sivadas Nair, Vedant Nerkar, Prajwal Nalawade
-          </p>
-          <p className="text-xs text-muted-foreground">Crescendo '26 Hackathon</p>
         </div>
       </div>
     </footer>
