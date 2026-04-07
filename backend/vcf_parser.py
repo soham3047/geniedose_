@@ -27,3 +27,31 @@ def scan_vcf_for_warfarin(vcf_path):
                     found_genotypes["cyp2c9"] = "*1/*3" if genotype_info == "0/1" else "*3/*3"
 
     return found_genotypes
+
+def scan_vcf(vcf_path, target_rsids):
+    """
+    Generic VCF scanner that finds genotypes for a list of RSIDs.
+    Used for Antidepressant mode and other future drug modules.
+    """
+    found_genotypes = {}
+    
+    # Standard VCFs like HG00098.vcf are tab-separated
+    with open(vcf_path, 'r') as f:
+        for line in f:
+            # Skip header lines starting with '#'
+            if line.startswith('#'):
+                continue
+            
+            columns = line.split('\t')
+            
+            # In your file, Column 3 (index 2) is the RSID (e.g., rs62224610)
+            rsid = columns[2]
+            
+            # Check if this RSID is one we need for the current mode (e.g., Antidepressant)
+            if rsid in target_rsids:
+                # Column 10 (index 9) contains the Genotype (GT)
+                # Format is usually '0/1:23:56', so we split by ':' to get '0/1'
+                genotype_info = columns[9].split(':')[0]
+                found_genotypes[rsid] = genotype_info
+
+    return found_genotypes
