@@ -1,0 +1,13 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##contig=<ID=chr10,length=133797422>
+##contig=<ID=chr16,length=90338345>
+##contig=<ID=chr22,length=50818468>
+##INFO=<ID=GENE,Number=1,Type=String,Description="Pharmacogene">
+##INFO=<ID=DRUG,Number=1,Type=String,Description="Impacted Medication">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	patient_high_risk
+chr10	94762706	rs4244285	G	A	99.0	PASS	GENE=CYP2C19;DRUG=Antidepressants	GT	1/1
+chr10	94981296	rs1057910	A	C	99.0	PASS	GENE=CYP2C9;DRUG=Warfarin	GT	1/1
+chr16	31107109	rs9923231	C	T	99.0	PASS	GENE=VKORC1;DRUG=Warfarin	GT	1/1
+chr22	42128945	rs3892097	C	T	99.0	PASS	GENE=CYP2D6;DRUG=Antidepressants	GT	1/1

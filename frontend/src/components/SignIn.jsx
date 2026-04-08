@@ -1,19 +1,58 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DNAHelix from './DNAHelix';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 
 const SignIn = () => {
   const navigate = useNavigate();
 
-  const handleSignIn = (role) => {
-    // Mock login logic
-    console.log(`Signing in as ${role}`);
-    if (role === 'doctor') {
-      navigate('/doctor-dashboard');
-    } else if (role === 'patient') {
-      navigate('/patient-dashboard');
+  const [clientId, setClientId] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+
+  const handleSignIn = async (role) => {
+    setAuthError('');
+
+    if (!clientId || !authToken) {
+      setAuthError('Please enter both client ID and auth token.');
+      return;
+    }
+
+    setIsSigningIn(true);
+
+    try {
+      const response = await fetch('/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          auth_token: authToken,
+          role
+        })
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(text || 'Login failed: invalid response from server');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      navigate(role === 'doctor' ? '/doctor-dashboard' : '/patient-dashboard');
+    } catch (err) {
+      setAuthError(err.message || 'Login failed.');
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
@@ -33,20 +72,43 @@ const SignIn = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              <div className="space-y-3">
+                <Input
+                  type="text"
+                  placeholder="Client ID"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  className="bg-muted text-foreground placeholder:text-muted-foreground border-border"
+                />
+                <Input
+                  type="password"
+                  placeholder="Auth Token"
+                  value={authToken}
+                  onChange={(e) => setAuthToken(e.target.value)}
+                  className="bg-muted text-foreground placeholder:text-muted-foreground border-border"
+                />
+              </div>
+
+              {authError && (
+                <div className="text-sm text-destructive">{authError}</div>
+              )}
+
               <Button
                 onClick={() => handleSignIn('doctor')}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 size="lg"
+                disabled={isSigningIn}
               >
-                Sign in as Doctor
+                {isSigningIn ? 'Signing in…' : 'Sign in as Doctor'}
               </Button>
               <Button
                 onClick={() => handleSignIn('patient')}
                 variant="outline"
                 className="w-full border-primary/50 bg-transparent text-white hover:bg-transparent"
                 size="lg"
+                disabled={isSigningIn}
               >
-                Sign in as Patient
+                {isSigningIn ? 'Signing in…' : 'Sign in as Patient'}
               </Button>
             </div>
           </CardContent>

@@ -1,0 +1,16 @@
+{
+  "nairsivadasm@gmail.com": {
+    "token": "9082873729",
+    "allowed": true,
+    "metadata": {
+      "auto_registered": true
+    }
+  },
+  "123": {
+    "token": "ABC",
+    "allowed": true,
+    "metadata": {
+      "auto_registered": true
+    }
+  }
+}

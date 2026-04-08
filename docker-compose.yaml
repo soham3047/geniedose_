@@ -1,0 +1,49 @@
+services:
+  server:
+    build: .
+    image: geniedose-server
+    container_name: fl-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app/shared
+    command: ["python", "server.py"]
+
+  client1:
+    build: .
+    image: geniedose-client1
+    container_name: fl-client-1
+    depends_on:
+      - server
+    environment:
+      - CLIENT_ID=client-1
+      - SERVER_ADDRESS=server:8080
+    volumes:
+      - .:/app/shared
+    command: ["python", "client.py"]
+
+  client2:
+    build: .
+    image: geniedose-client2
+    container_name: fl-client-2
+    depends_on:
+      - server
+    environment:
+      - CLIENT_ID=client-2
+      - SERVER_ADDRESS=server:8080
+    volumes:
+      - .:/app/shared
+    command: ["python", "client.py"]
+
+  client3:
+    build: .
+    image: geniedose-client3
+    container_name: fl-client-3
+    depends_on:
+      - server
+    environment:
+      - CLIENT_ID=client-3
+      - SERVER_ADDRESS=server:8080
+    volumes:
+      - .:/app/shared
+    command: ["python", "client.py"]

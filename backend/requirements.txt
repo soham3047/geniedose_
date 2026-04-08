@@ -1,0 +1,10 @@
+firebase-admin
+flwr
+torch
+torchvision
+numpy
+pandas
+scikit-learn
+flask
+flask-cors
+werkzeug

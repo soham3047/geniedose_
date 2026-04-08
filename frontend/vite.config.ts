@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/login": "http://127.0.0.1:5000",
+      "/register-client": "http://127.0.0.1:5000",
+      "/verify-client": "http://127.0.0.1:5000",
+      "/calculate-dose": "http://127.0.0.1:5000",
+      "/upload-vcf": "http://127.0.0.1:5000",
+      "/predict-warfarin": "http://127.0.0.1:5000"
+    },
     hmr: {
       overlay: false,
     },

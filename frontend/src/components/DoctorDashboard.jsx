@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { mockPatients, mockMedicines, mockAIOutput } from '../mockData';
+import Navbar from './Navbar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { QrReader } from 'react-qr-reader';
 
 const DoctorDashboard = () => {
   const [patients, setPatients] = useState(mockPatients);
@@ -26,6 +28,11 @@ const DoctorDashboard = () => {
   const [newPatientHistory, setNewPatientHistory] = useState('');
   const [error, setError] = useState(null);
   const [doctorAdvice, setDoctorAdvice] = useState('');
+  const [scanActive, setScanActive] = useState(false);
+  const [scanResult, setScanResult] = useState('');
+  const [scanError, setScanError] = useState('');
+  const [manualQr, setManualQr] = useState('');
+  const [validatedPatientId, setValidatedPatientId] = useState(null);
 
   useEffect(() => {
     setFilteredPatients(
@@ -130,18 +137,8 @@ const DoctorDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-sidebar-background text-sidebar-foreground p-6">
-        <h2 className="text-xl font-bold mb-6">GenieDose</h2>
-        <nav className="space-y-4">
-          <a href="#" className="block py-2 px-4 rounded hover:bg-blue-800">Dashboard</a>
-          <a href="#" className="block py-2 px-4 rounded hover:bg-blue-800">Patients</a>
-          <a href="#" className="block py-2 px-4 rounded hover:bg-blue-800">Reports</a>
-          <a href="#" className="block py-2 px-4 rounded hover:bg-blue-800">Settings</a>
-        </nav>
-      </div>
-
+    <div className="min-h-screen bg-background">
+      <Navbar />
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Nav */}
@@ -210,6 +207,75 @@ const DoctorDashboard = () => {
                   <p className="text-lg font-bold text-primary">{selectedPatient.name}</p>
                 </div>
               )}
+              <div className="p-3 rounded-lg bg-muted/80 border border-border/50">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <Button
+                      onClick={() => {
+                        setScanActive(!scanActive);
+                        setScanError('');
+                        setScanResult('');
+                      }}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      {scanActive ? 'Stop QR Scan' : 'Scan Patient QR'}
+                    </Button>
+                    <Input
+                      type="text"
+                      placeholder="Manual QR payload"
+                      value={manualQr}
+                      onChange={(e) => setManualQr(e.target.value)}
+                      className="bg-background text-foreground border-border"
+                    />
+                    <Button
+                      onClick={() => {
+                        setScanError('');
+                        setScanResult(manualQr || '');
+                      }}
+                      className="bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                    >
+                      Validate Manually
+                    </Button>
+                  </div>
+                  {scanActive && (
+                    <div className="rounded-lg overflow-hidden border border-border/50 bg-black max-w-md mx-auto">
+                      <QrReader
+                        constraints={{ facingMode: 'environment' }}
+                        onResult={(result, error) => {
+                          if (!!result) {
+                            setScanResult(result?.text || '');
+                            setScanActive(false);
+                          }
+                          if (!!error) {
+                            setScanError(error?.message || 'Scan error');
+                          }
+                        }}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  )}
+                  {scanResult && (
+                    <div className="rounded-lg border border-primary/40 bg-primary/10 p-3">
+                      <p className="text-sm text-muted-foreground">Scan result:</p>
+                      <p className="text-base text-foreground break-all">{scanResult}</p>
+                      {scanResult.startsWith('geniedose://patient/') ? (
+                        <p className="mt-2 text-sm font-medium text-emerald-400">
+                          Valid patient QR detected: ID {scanResult.split('/').pop()}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm font-medium text-rose-400">
+                          Invalid QR value. Expected patient URI.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {scanError && (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                      {scanError}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Select Dropdown */}
               <Select
@@ -426,17 +492,34 @@ const DoctorDashboard = () => {
                   />
                   <div className="flex gap-2 mt-2">
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         // Save doctor's advice to patient data
                         if (selectedPatient && doctorAdvice.trim()) {
-                          const updatedPatients = patients.map(patient =>
-                            patient.id === selectedPatient.id
-                              ? { ...patient, doctorAdvice: doctorAdvice.trim() }
-                              : patient
-                          );
-                          setPatients(updatedPatients);
-                          setSelectedPatient({ ...selectedPatient, doctorAdvice: doctorAdvice.trim() });
-                          alert('Doctor\'s advice saved to patient record!');
+                          try {
+                            const response = await fetch('/update-patient-advice', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                patient_id: selectedPatient.id,
+                                advice: doctorAdvice.trim(),
+                              }),
+                            });
+                            if (!response.ok) {
+                              throw new Error('Failed to update advice');
+                            }
+                            const updatedPatients = patients.map(patient =>
+                              patient.id === selectedPatient.id
+                                ? { ...patient, doctorAdvice: doctorAdvice.trim() }
+                                : patient
+                            );
+                            setPatients(updatedPatients);
+                            setSelectedPatient({ ...selectedPatient, doctorAdvice: doctorAdvice.trim() });
+                            alert('Doctor\'s advice saved to patient record!');
+                          } catch (error) {
+                            alert('Error saving advice: ' + error.message);
+                          }
                         }
                       }}
                       disabled={!selectedPatient || !doctorAdvice.trim()}
